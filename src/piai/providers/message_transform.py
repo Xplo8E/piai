@@ -194,10 +194,6 @@ def build_request_body(
     if opts.get("session_id"):
         body["prompt_cache_key"] = opts["session_id"]
 
-    temperature = opts.get("temperature")
-    if temperature is not None:
-        body["temperature"] = temperature
-
     reasoning_effort = opts.get("reasoning_effort")
     if reasoning_effort:
         body["reasoning"] = {

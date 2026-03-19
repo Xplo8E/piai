@@ -190,14 +190,22 @@ options = {
     "reasoning_effort": "high",      # low / medium / high / xhigh (clamped per model)
     "reasoning_summary": "auto",     # auto / concise / detailed / off
     "text_verbosity": "medium",      # low / medium / high
-    "temperature": 0.7,
     "base_url": "...",               # Override backend URL (testing only)
 }
 ```
 
+> **Note:** `temperature` is **not supported** by the ChatGPT backend and will cause a 400 error if passed.
+
 ---
 
 ## Changelog
+
+### 2026-03-19 — Examples + temperature note
+- **Examples** Added `examples/` directory with two runnable examples:
+  - `mcp_filesystem_agent.py` — piai native `agent()` + MCP filesystem server
+  - `langchain_mcp_agent.py` — `PiAIChatModel` with invoke/astream/bind_tools/MCP agent patterns
+- **Docs** Removed `temperature` from all options references — the ChatGPT backend rejects it with a 400 error
+- **Code** Removed `temperature` passthrough from `build_request_body()` in `providers/message_transform.py`
 
 ### 2026-03-19 — Autoresearch improvement pass
 - **Bug fix** `stream.py`: Copy options dict before `pop("base_url")` — prevents mutating caller's dict

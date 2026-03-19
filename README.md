@@ -271,9 +271,10 @@ options = {
     "reasoning_effort": "high",        # for reasoning models (gpt-5.x): low/medium/high
     "reasoning_summary": "auto",       # auto/concise/detailed/off
     "text_verbosity": "medium",        # low/medium/high
-    "temperature": 0.7,
 }
 ```
+
+> **Note:** `temperature` is **not supported** by the ChatGPT backend — the API will return an error if you pass it.
 
 ---
 

@@ -234,15 +234,10 @@ def test_empty_assistant_text_not_emitted():
     assert result == []
 
 
-def test_temperature_in_body():
+def test_temperature_not_passed_to_backend():
+    """temperature is unsupported by the ChatGPT backend — must never be sent."""
     ctx = Context(messages=[UserMessage(content="Hi")])
     body = build_request_body("gpt-5.1-codex-mini", ctx, options={"temperature": 0.7})
-    assert body["temperature"] == 0.7
-
-
-def test_no_temperature_by_default():
-    ctx = Context(messages=[UserMessage(content="Hi")])
-    body = build_request_body("gpt-5.1-codex-mini", ctx)
     assert "temperature" not in body
 
 
