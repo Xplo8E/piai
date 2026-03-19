@@ -57,7 +57,7 @@ async def stream(
     if not account_id:
         raise RuntimeError("Missing accountId in credentials. Please login again: piai login")
 
-    opts = options or {}
+    opts = dict(options or {})
     base_url = opts.pop("base_url", None)
 
     async for event in stream_openai_codex(

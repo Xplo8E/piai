@@ -147,13 +147,18 @@ async def _run_loop(
     """Internal agentic loop."""
     # Build working context — inject MCP tools if available
     if hub is not None:
-        tools = hub.all_tools()
-        if not tools:
+        mcp_tools = hub.all_tools()
+        if not mcp_tools:
             logger.warning("No tools discovered from MCP servers. Running without tools.")
+        # Merge MCP tools with any pre-defined context tools (MCP takes priority on name collision)
+        existing_names = {t.name for t in mcp_tools}
+        extra_tools = [t for t in (context.tools or []) if t.name not in existing_names]
+        merged = mcp_tools + extra_tools
+        combined_tools = merged if merged else None
         ctx = Context(
             messages=list(context.messages),
             system_prompt=context.system_prompt,
-            tools=tools or context.tools,
+            tools=combined_tools,
         )
     else:
         ctx = Context(

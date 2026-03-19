@@ -148,6 +148,24 @@ class TestLcMessagesToPiai:
         ctx = _lc_messages_to_piai([HumanMessage(content="x")])
         assert isinstance(ctx, Context)
 
+    def test_ai_message_list_content_extracts_text(self):
+        """AIMessage with list content (multi-modal) extracts text blocks."""
+        msgs = [AIMessage(content=[{"type": "text", "text": "Hello"}, {"type": "text", "text": " world"}])]
+        ctx = _lc_messages_to_piai(msgs)
+        msg = ctx.messages[0]
+        assert isinstance(msg, AssistantMessage)
+        text_blocks = [b for b in msg.content if isinstance(b, TextContent)]
+        assert len(text_blocks) == 1
+        assert text_blocks[0].text == "Hello world"
+
+    def test_ai_message_empty_list_content_no_text_block(self):
+        """AIMessage with empty list content should produce no text block."""
+        msgs = [AIMessage(content=[])]
+        ctx = _lc_messages_to_piai(msgs)
+        msg = ctx.messages[0]
+        assert isinstance(msg, AssistantMessage)
+        assert msg.content == []  # no text block for empty content
+
 
 # ------------------------------------------------------------------ #
 # _lc_tools_to_piai                                                  #

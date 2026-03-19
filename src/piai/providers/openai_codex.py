@@ -138,7 +138,7 @@ async def _parse_sse(response: httpx.Response) -> AsyncGenerator[dict[str, Any],
     """
     Parse Server-Sent Events from an httpx streaming response.
 
-    Event boundary: double newline (\\n\\n).
+    Event boundary: double newline (\\n\\n or \\r\\n\\r\\n normalized to \\n\\n).
     Data lines start with "data:".
     "[DONE]" sentinel is skipped.
 
@@ -146,7 +146,8 @@ async def _parse_sse(response: httpx.Response) -> AsyncGenerator[dict[str, Any],
     """
     buffer = ""
     async for chunk in response.aiter_text():
-        buffer += chunk
+        # Normalize CRLF to LF for consistent parsing
+        buffer += chunk.replace("\r\n", "\n").replace("\r", "\n")
         while "\n\n" in buffer:
             event_str, buffer = buffer.split("\n\n", 1)
             data_lines = [
@@ -403,7 +404,6 @@ class _StreamProcessor:
                     thinking_text = "\n\n".join(p["text"] for p in summary_parts)
                     thinking_block = ThinkingContent(thinking=thinking_text)
                     self._output.content.append(thinking_block)
-                    yield ThinkingDeltaEvent(thinking="")  # signal end to any listener
                     self._current_block = None
 
                 elif item_type == "message" and self._current_block and self._current_block.get("type") == "text":

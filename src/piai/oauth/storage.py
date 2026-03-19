@@ -62,7 +62,9 @@ def save_credentials(provider_id: str, creds: OAuthCredentials) -> None:
 def delete_credentials(provider_id: str) -> None:
     """Remove credentials for a provider from auth.json."""
     all_creds = load_all_credentials()
-    all_creds.pop(provider_id, None)
+    if provider_id not in all_creds:
+        return
+    all_creds.pop(provider_id)
     _auth_file().write_text(
         json.dumps(all_creds, indent=2, ensure_ascii=False),
         encoding="utf-8",

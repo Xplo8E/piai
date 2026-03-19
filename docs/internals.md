@@ -36,6 +36,7 @@ Python gotcha: `base64.urlsafe_b64encode()` adds `=` padding — strip it manual
 - Reads/writes `auth.json` in the **current working directory** (same as JS CLI)
 - Full file is loaded, updated, and written back atomically (no partial writes)
 - Returns `{}` silently if `auth.json` doesn't exist or is malformed
+- `delete_credentials()` skips the file write if the provider wasn't present (no unnecessary I/O)
 
 ---
 
@@ -43,11 +44,11 @@ Python gotcha: `base64.urlsafe_b64encode()` adds `=` padding — strip it manual
 
 **Constants**
 ```python
-CLIENT_ID    = "app_EMoamEEZ73f0CkXaXp7hrann"
-AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
-TOKEN_URL    = "https://auth.openai.com/oauth/token"
-REDIRECT_URI = "http://localhost:1455/auth/callback"
-SCOPE        = "openid profile email offline_access"
+CLIENT_ID      = "app_EMoamEEZ73f0CkXaXp7hrann"
+AUTHORIZE_URL  = "https://auth.openai.com/oauth/authorize"
+TOKEN_URL      = "https://auth.openai.com/oauth/token"
+REDIRECT_URI   = "http://localhost:1455/auth/callback"
+SCOPE          = "openid profile email offline_access"
 JWT_CLAIM_PATH = "https://api.openai.com/auth"
 ```
 These must match the JS SDK exactly — they're registered OAuth client values.
@@ -67,6 +68,7 @@ These must match the JS SDK exactly — they're registered OAuth client values.
 - Full PKCE flow: generate verifier/challenge → build auth URL → start server → open browser → wait for callback → exchange code → return credentials
 - If `on_manual_code_input` is provided, races browser callback vs manual paste (whichever comes first wins)
 - Fallback: if server can't start (port in use), prompts user to paste the redirect URL
+- Uses `asyncio.get_running_loop()` (not deprecated `get_event_loop()`)
 
 **`_parse_authorization_input(raw)`**
 - Handles three input formats: full redirect URL, query string (`code=...&state=...`), or bare code
@@ -92,18 +94,30 @@ Converts piai's `Context` / `Message` types to the OpenAI Responses API wire for
 - Model-specific effort value constraints (mirrors JS `clampReasoningEffort()`):
   - `gpt-5.2/5.3/5.4`: `"minimal"` → `"low"`
   - `gpt-5.1`: `"xhigh"` → `"high"`
-  - `gpt-5.1-codex-mini`: only supports `"medium"` or `"high"`
+  - `gpt-5.1-codex-mini`: only supports `"medium"` or `"high"` (all others → `"medium"`, `"high"`/`"xhigh"` → `"high"`)
+- Strips provider prefix: `"openai-codex/gpt-5.1"` → `"gpt-5.1"` before checking
 
 **`build_request_body(model_id, context, options)`**
 - Always sets `store: False`, `stream: True`, `include: ["reasoning.encrypted_content"]`
 - `instructions` defaults to `"You are a helpful assistant."` if no system prompt
 - `prompt_cache_key` is set from `options["session_id"]` if provided
+- Empty `TextContent` blocks (empty string) are not emitted to the wire format
 
 ---
 
 ## providers/openai_codex.py
 
 The core streaming provider. POSTs to `https://chatgpt.com/backend-api/codex/responses` and processes the SSE stream.
+
+**`_make_tc_id(call_id, item_id) -> str`**
+- The Responses API sends `call_id` and `item_id` separately for tool calls
+- Combined as `f"{call_id}|{item_id}"` truncated to 64 chars (API enforces this limit)
+- Applied consistently in `ToolCallStartEvent`, `ToolCallDeltaEvent`, and `ToolCallEndEvent`
+
+**`_parse_sse(response)`**
+- Normalizes `\r\n` and `\r` to `\n` before parsing (handles CRLF servers)
+- Splits on `\n\n` event boundaries, handles partial chunks across network reads
+- Skips `[DONE]` sentinel, empty events, and invalid JSON silently
 
 **`_StreamProcessor`** — state machine mirroring JS `processResponsesStream()`
 
@@ -119,14 +133,26 @@ SSE event handling:
 | `response.reasoning_summary_part.added` | Begin accumulating reasoning text |
 | `response.reasoning_summary_text.delta` | Emit `ThinkingDeltaEvent`, accumulate |
 | `response.reasoning_summary_part.done` | Append `"\n\n"` separator to thinking block |
-| `response.content_part.added` | Set `current_block` (only for `output_text` / `refusal`) |
-| `response.output_text.delta` | Emit `TextDeltaEvent` (guarded: only if content block active) |
+| `response.content_part.added` | Set content part type (`output_text` or `refusal`) |
+| `response.output_text.delta` | Emit `TextDeltaEvent` (guarded: only if content block active and last part is `output_text`) |
 | `response.refusal.delta` | Emit `TextDeltaEvent` (refusals surface as text) |
 | `response.function_call_arguments.delta` | Emit `ToolCallDeltaEvent`, accumulate |
-| `response.function_call_arguments.done` | Parse JSON args, emit `ToolCallEndEvent` |
-| `response.output_item.done` | Finalize text/thinking block, emit `TextEndEvent` |
-| `response.completed` | Build final `AssistantMessage`, emit `DoneEvent` |
-| `response.failed` | Extract `incomplete_details.reason`, emit `ErrorEvent` |
+| `response.function_call_arguments.done` | Canonicalize args from the done event |
+| `response.output_item.done` (reasoning) | Reconstruct thinking from summary parts, append `ThinkingContent` to output |
+| `response.output_item.done` (message) | Join content parts, emit `TextEndEvent`, append `TextContent` to output |
+| `response.output_item.done` (function_call) | Parse JSON args, emit `ToolCallEndEvent`, append `ToolCallContent` to output |
+| `response.completed` | Extract usage + stop reason, emit (nothing — caller emits `DoneEvent`) |
+| `response.failed` | Extract error from `response.error` or `incomplete_details.reason`, raise `RuntimeError` |
+| `error` | Raise `RuntimeError` immediately |
+
+**Stop reason mapping:**
+
+| API status | `stop_reason` |
+|------------|--------------|
+| `"completed"` with tool calls | `"tool_use"` |
+| `"completed"` without tool calls | `"stop"` |
+| `"incomplete"` | `"length"` |
+| `"failed"` / `"cancelled"` | `"error"` |
 
 **Retry logic**
 - Max 3 retries on network/transient errors
@@ -143,10 +169,6 @@ output_tokens = usage.get("output_tokens", 0)
 net_input = input_tokens - cached
 ```
 
-**Tool call ID format**
-- The Responses API sends `call_id` and `item_id` separately
-- Combined as `f"{call_id}|{item_id}"` to form a unique tool call ID
-
 ---
 
 ## stream.py
@@ -155,10 +177,115 @@ Thin orchestration layer:
 1. Load credentials from `auth.json`
 2. Auto-refresh if within 5-minute expiry buffer
 3. Save updated credentials back (rotation)
-4. Call `stream_openai_codex()` and yield events
+4. Copy `options` dict before calling provider (avoids mutating caller's dict when `base_url` is popped)
+5. Call `stream_openai_codex()` and yield events
 
 `complete()` collects all events and returns the final `AssistantMessage` from `DoneEvent`.
 `complete_text()` collects only `TextDeltaEvent.text` and returns a plain string.
+
+---
+
+## agent.py
+
+**`agent(model_id, context, mcp_servers, ...)`**
+
+Entry point for the autonomous agentic loop.
+
+1. If `mcp_servers` provided: creates `MCPHub`, connects all servers, discovers tools
+2. Merges MCP tools with `context.tools` (MCP takes priority on name conflicts, user tools appended de-duplicated)
+3. Runs `stream()` in a loop up to `max_turns`:
+   - Collects `ToolCallEndEvent` items each turn
+   - On `ErrorEvent`: raises `RuntimeError`
+   - If no tool calls emitted: model is done, break
+   - Appends `AssistantMessage` + `ToolResultMessage` per tool result to context
+   - Continues to next turn
+4. Returns final `AssistantMessage`
+
+**`_execute_tool(hub, tc, max_chars)`** — never raises:
+- `KeyError` (unknown tool) → returns error string
+- Any other exception → returns error string prefixed with tool name
+
+**`_fire_event(callback, event)`** — supports both sync and async `on_event` callbacks via `inspect.isawaitable`.
+
+---
+
+## mcp/server.py
+
+`MCPServer` is a plain dataclass — no connection logic, just configuration.
+
+Factory methods:
+- `.stdio(command)` — uses `shlex.split` for correct handling of paths with spaces
+- `.http(url)` — Streamable HTTP transport (modern, recommended)
+- `.sse(url)` — legacy SSE transport
+- `.from_config(dict)` — auto-detects transport from dict keys (`"command"` → stdio, `"url"` → http/sse)
+- `.from_toml(path, section="mcp_servers")` — loads piai TOML config format
+
+`env_extra` merges on top of `os.environ` (preserves PATH etc.). `env` replaces entirely.
+
+---
+
+## mcp/client.py
+
+`MCPClient` manages one persistent MCP server connection.
+
+**`connect()`** — wraps `_connect_inner()` with `asyncio.wait_for(timeout=connect_timeout)`. On timeout, cleans up the `AsyncExitStack` and raises `TimeoutError`.
+
+**Transport setup:**
+- `stdio`: `StdioServerParameters` → `stdio_client()` → `ClientSession`
+- `http`: `streamablehttp_client()` → unpack `(read, write, _)` → `ClientSession`
+- `sse`: `sse_client()` → unpack `(read, write)` → `ClientSession`
+
+**`call_tool(name, arguments)`** — result processing:
+- `TextContent` (has `.text`): appended as-is
+- `ImageContent` (has `.data`): summarized as `[mime data: N bytes]` (preserves MIME type)
+- `EmbeddedResource` (has `.resource`): extracts `.text` if available, else summarizes URI
+- Any other block: `str(block)`
+- `result.isError`: prepended with `"Tool error: "`
+- Truncated to `tool_result_max_chars` with a count of remaining chars
+
+---
+
+## mcp/hub.py
+
+`MCPHub` connects to N servers concurrently and routes tool calls.
+
+**`connect()`**: `asyncio.gather(*[c.connect() for c in clients], return_exceptions=True)`. Failed clients are logged and skipped. If `require_all=True`, raises on any failure.
+
+**`_register_tool(tool, client)`** collision handling:
+1. No collision → register as `tool.name` → `(client, original_name)`
+2. Collision detected:
+   - Re-register existing tool under `existing_server__tool_name`
+   - Register new tool under `new_server__tool_name`
+   - Original unnamespaced name still routes to first server (backward compat)
+3. Warning logged on collision
+
+`_safe_name()` replaces `-`, `.`, ` ` with `_` for namespace prefix safety.
+
+---
+
+## langchain/chat_model.py
+
+`PiAIChatModel(BaseChatModel)` fields:
+- `model_name: str` — passed to piai `stream()`
+- `provider_id: str` — defaults to `"openai-codex"`
+- `options: dict` — merged with call-time options (call-time wins)
+
+**`_lc_messages_to_piai()`** — type mapping:
+- `SystemMessage` → `context.system_prompt`
+- `HumanMessage` → `UserMessage`
+- `AIMessage` (str content) → `AssistantMessage` with `TextContent`
+- `AIMessage` (list content) → extracts text from `{"type": "text", "text": "..."}` blocks
+- `AIMessage` with `tool_calls` → `ToolCallContent` appended to content
+- `ToolMessage` → `ToolResultMessage`
+
+**`_astream()`** event mapping:
+- `TextDeltaEvent` → `ChatGenerationChunk(AIMessageChunk(content=delta))`
+- `ToolCallStartEvent` → chunk with `tool_call_chunks[{name, args:"", id, index}]`
+- `ToolCallDeltaEvent` → chunk with `tool_call_chunks[{args:delta, index}]`
+- `DoneEvent` → chunk with `generation_info={"finish_reason": reason}`
+- `ErrorEvent` → raises `RuntimeError`
+
+**`bind_tools()`** uses `langchain_core.utils.function_calling.convert_to_openai_tool` to accept `BaseTool`, Pydantic models, plain functions, or dicts.
 
 ---
 
@@ -173,4 +300,4 @@ Commands:
 - `piai logout [PROVIDER]` — Deletes provider entry from `auth.json`
 - `piai list` — Lists registered OAuth providers
 - `piai status` — Shows login status and token expiry for all providers
-- `piai run PROMPT` — One-shot completion, streams to stdout
+- `piai run PROMPT [--model] [--system] [--provider]` — One-shot completion, streams to stdout

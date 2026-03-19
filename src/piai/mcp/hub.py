@@ -5,8 +5,8 @@ Connects to all servers concurrently, merges their tools into a flat list,
 and routes tool calls to the correct server automatically.
 
 Tool name collision handling:
-  If two servers expose a tool with the same name, the second server's tool
-  is prefixed with the server name: "servername__tool_name".
+  If two servers expose a tool with the same name, both tools are namespaced:
+  "server1__tool_name" and "server2__tool_name".
   A warning is logged when this happens.
 """
 

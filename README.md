@@ -391,6 +391,23 @@ servers = MCPServer.from_toml("~/.piai/config.toml")
 result = await agent(model_id="gpt-5.1-codex-mini", context=ctx, mcp_servers=servers)
 ```
 
+**agent() options:**
+```python
+result = await agent(
+    model_id="gpt-5.1-codex-mini",
+    context=ctx,
+    mcp_servers=[...],
+    options={"reasoning_effort": "medium"},
+    max_turns=20,                    # safety limit on agentic iterations
+    on_event=my_callback,            # sync or async callback for every StreamEvent
+    require_all_servers=False,       # True = raise if any server fails to connect
+    connect_timeout=60.0,            # per-server connection timeout in seconds
+    tool_result_max_chars=32_000,    # max chars per tool result (prevents context explosion)
+)
+```
+
+**Pre-defined tools + MCP:** If you pass both `context.tools` and `mcp_servers`, they are merged. MCP tools take priority on name conflicts; your pre-defined tools are appended de-duplicated.
+
 See [docs/mcp.md](docs/mcp.md) for the full MCP reference.
 
 ---

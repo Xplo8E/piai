@@ -72,8 +72,23 @@ def _lc_messages_to_piai(messages: list[BaseMessage]) -> Context:
         elif msg.type == "ai":
             blocks = []
             if msg.content:
-                text = msg.content if isinstance(msg.content, str) else str(msg.content)
-                blocks.append(TextContent(text=text))
+                if isinstance(msg.content, str):
+                    text = msg.content
+                elif isinstance(msg.content, list):
+                    # Extract text from content blocks (e.g. [{"type": "text", "text": "..."}])
+                    parts = []
+                    for item in msg.content:
+                        if isinstance(item, str):
+                            parts.append(item)
+                        elif isinstance(item, dict) and item.get("type") == "text":
+                            parts.append(item.get("text", ""))
+                        elif isinstance(item, dict):
+                            parts.append(str(item.get("text", item)))
+                    text = "".join(parts)
+                else:
+                    text = str(msg.content)
+                if text:
+                    blocks.append(TextContent(text=text))
             if msg.tool_calls:
                 tcs = [
                     ToolCall(id=tc["id"], name=tc["name"], input=tc["args"])

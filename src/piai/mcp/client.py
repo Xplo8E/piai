@@ -163,11 +163,26 @@ class MCPClient:
         # Concatenate all content blocks
         parts = []
         for block in result.content:
-            if hasattr(block, "text"):
-                parts.append(block.text)
-            elif hasattr(block, "data"):
+            if hasattr(block, "text") and block.text is not None:
+                parts.append(str(block.text))
+            elif hasattr(block, "data") and block.data is not None:
                 # Binary/image content — summarize rather than dump bytes
-                parts.append(f"[binary data: {len(block.data)} bytes]")
+                data = block.data
+                if isinstance(data, (bytes, bytearray)):
+                    size_str = f"{len(data)} bytes"
+                else:
+                    size_str = f"{len(str(data))} chars"
+                mime = getattr(block, "mimeType", "binary")
+                parts.append(f"[{mime} data: {size_str}]")
+            elif hasattr(block, "resource"):
+                # EmbeddedResource — extract text if available
+                resource = block.resource
+                if hasattr(resource, "text") and resource.text is not None:
+                    parts.append(str(resource.text))
+                elif hasattr(resource, "blob"):
+                    parts.append(f"[embedded resource: {getattr(resource, 'uri', 'unknown')}]")
+                else:
+                    parts.append(str(resource))
             else:
                 parts.append(str(block))
 
