@@ -50,6 +50,12 @@ CODEX_PATH = "/codex/responses"
 
 MAX_RETRIES = 3
 BASE_DELAY_S = 1.0
+MAX_TOOL_CALL_ID_LEN = 64
+
+
+def _make_tc_id(call_id: str, item_id: str) -> str:
+    """Build tool call ID, truncated to API limit of 64 chars."""
+    return f"{call_id}|{item_id}"[:MAX_TOOL_CALL_ID_LEN]
 
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 _RETRYABLE_PATTERN = re.compile(
@@ -132,7 +138,7 @@ async def _parse_sse(response: httpx.Response) -> AsyncGenerator[dict[str, Any],
     """
     Parse Server-Sent Events from an httpx streaming response.
 
-    Event boundary: double newline (\\n\\n).
+    Event boundary: double newline (\\n\\n or \\r\\n\\r\\n normalized to \\n\\n).
     Data lines start with "data:".
     "[DONE]" sentinel is skipped.
 
@@ -140,7 +146,8 @@ async def _parse_sse(response: httpx.Response) -> AsyncGenerator[dict[str, Any],
     """
     buffer = ""
     async for chunk in response.aiter_text():
-        buffer += chunk
+        # Normalize CRLF to LF for consistent parsing
+        buffer += chunk.replace("\r\n", "\n").replace("\r", "\n")
         while "\n\n" in buffer:
             event_str, buffer = buffer.split("\n\n", 1)
             data_lines = [
@@ -262,7 +269,7 @@ class _StreamProcessor:
                         "name": name,
                         "args": item.get("arguments", ""),
                     }
-                    tc = ToolCall(id=f"{call_id}|{item_id}", name=name)
+                    tc = ToolCall(id=_make_tc_id(call_id, item_id), name=name)
                     yield ToolCallStartEvent(tool_call=tc)
 
             # -------------------------------------------------------- #
@@ -369,7 +376,7 @@ class _StreamProcessor:
                     self._current_item["arguments"] += delta
                     call_id = self._current_block["call_id"]
                     item_id = self._current_block["item_id"]
-                    yield ToolCallDeltaEvent(id=f"{call_id}|{item_id}", json_delta=delta)
+                    yield ToolCallDeltaEvent(id=_make_tc_id(call_id, item_id), json_delta=delta)
 
             elif t == "response.function_call_arguments.done":
                 if (
@@ -397,7 +404,6 @@ class _StreamProcessor:
                     thinking_text = "\n\n".join(p["text"] for p in summary_parts)
                     thinking_block = ThinkingContent(thinking=thinking_text)
                     self._output.content.append(thinking_block)
-                    yield ThinkingDeltaEvent(thinking="")  # signal end to any listener
                     self._current_block = None
 
                 elif item_type == "message" and self._current_block and self._current_block.get("type") == "text":
@@ -427,7 +433,7 @@ class _StreamProcessor:
                         item_id = self._current_block["item_id"]
                         name = self._current_block["name"]
 
-                    tc = ToolCall(id=f"{call_id}|{item_id}", name=name, input=input_dict)
+                    tc = ToolCall(id=_make_tc_id(call_id, item_id), name=name, input=input_dict)
                     self._output.content.append(ToolCallContent(tool_calls=[tc]))
                     yield ToolCallEndEvent(tool_call=tc)
                     self._current_block = None

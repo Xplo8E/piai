@@ -363,7 +363,7 @@ async def login_openai_codex(
         if server_started:
             if on_manual_code_input:
                 # Race: browser callback vs manual paste — whichever wins
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 manual_future: asyncio.Future = loop.create_future()
                 browser_future: asyncio.Future = loop.create_future()
 
@@ -406,7 +406,7 @@ async def login_openai_codex(
                     code = result
             else:
                 # Wait for browser callback only
-                code = await asyncio.get_event_loop().run_in_executor(
+                code = await asyncio.get_running_loop().run_in_executor(
                     None, lambda: server.wait_for_code(CALLBACK_TIMEOUT_S)
                 )
         # else: server not started, fall through to manual paste
