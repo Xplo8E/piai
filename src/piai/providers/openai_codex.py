@@ -50,6 +50,12 @@ CODEX_PATH = "/codex/responses"
 
 MAX_RETRIES = 3
 BASE_DELAY_S = 1.0
+MAX_TOOL_CALL_ID_LEN = 64
+
+
+def _make_tc_id(call_id: str, item_id: str) -> str:
+    """Build tool call ID, truncated to API limit of 64 chars."""
+    return f"{call_id}|{item_id}"[:MAX_TOOL_CALL_ID_LEN]
 
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 _RETRYABLE_PATTERN = re.compile(
@@ -262,7 +268,7 @@ class _StreamProcessor:
                         "name": name,
                         "args": item.get("arguments", ""),
                     }
-                    tc = ToolCall(id=f"{call_id}|{item_id}", name=name)
+                    tc = ToolCall(id=_make_tc_id(call_id, item_id), name=name)
                     yield ToolCallStartEvent(tool_call=tc)
 
             # -------------------------------------------------------- #
@@ -369,7 +375,7 @@ class _StreamProcessor:
                     self._current_item["arguments"] += delta
                     call_id = self._current_block["call_id"]
                     item_id = self._current_block["item_id"]
-                    yield ToolCallDeltaEvent(id=f"{call_id}|{item_id}", json_delta=delta)
+                    yield ToolCallDeltaEvent(id=_make_tc_id(call_id, item_id), json_delta=delta)
 
             elif t == "response.function_call_arguments.done":
                 if (
@@ -427,7 +433,7 @@ class _StreamProcessor:
                         item_id = self._current_block["item_id"]
                         name = self._current_block["name"]
 
-                    tc = ToolCall(id=f"{call_id}|{item_id}", name=name, input=input_dict)
+                    tc = ToolCall(id=_make_tc_id(call_id, item_id), name=name, input=input_dict)
                     self._output.content.append(ToolCallContent(tool_calls=[tc]))
                     yield ToolCallEndEvent(tool_call=tc)
                     self._current_block = None

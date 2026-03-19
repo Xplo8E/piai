@@ -22,6 +22,7 @@ dependencies = [
     "httpx>=0.27",
     "click>=8.0",
     "websockets>=12.0",
+    "mcp>=1.0",
 ]
 
 [project.urls]
@@ -51,5 +52,6 @@ typeCheckingMode = "basic"
 
 [dependency-groups]
 dev = [
+    "langchain-core>=1.2.20",
     "pytest>=9.0.2",
 ]

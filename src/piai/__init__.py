@@ -26,6 +26,8 @@ Quick start:
     asyncio.run(main())
 """
 
+from .agent import agent
+from .mcp import MCPHub, MCPServer
 from .stream import complete, complete_text, stream
 from .types import (
     AssistantMessage,
@@ -49,6 +51,9 @@ from .types import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "agent",
+    "MCPServer",
+    "MCPHub",
     "stream",
     "complete",
     "complete_text",

@@ -30,6 +30,12 @@ src/piai/
 │   ├── storage.py           # auth.json read/write (CWD, camelCase keys)
 │   ├── pkce.py              # RFC 7636 PKCE: verifier + challenge
 │   └── openai_codex.py      # ChatGPT Plus OAuth login + refresh
+├── agent.py                 # agent() — autonomous agentic loop with MCP
+├── mcp/
+│   ├── __init__.py          # exports MCPServer, MCPClient, MCPHub
+│   ├── server.py            # MCPServer config (stdio/http/sse factory methods)
+│   ├── client.py            # MCPClient — persistent connection to one MCP server
+│   └── hub.py               # MCPHub — manages N servers, merges tools, routes calls
 └── providers/
     ├── message_transform.py # Context → OpenAI Responses API wire format
     └── openai_codex.py      # SSE streaming + _StreamProcessor state machine
@@ -43,6 +49,48 @@ docs/
     contributing.md          # Setup and contribution guide
     AGENTS.md                 # This file
 ```
+
+---
+
+## MCP integration
+
+piai has a native MCP client layer. No LangChain, no mcpo, no manual tool wrappers.
+
+```python
+from piai import agent
+from piai.mcp import MCPServer
+from piai.types import Context, UserMessage
+
+ctx = Context(messages=[UserMessage(content="Analyze /lib/target.so")])
+
+result = await agent(
+    model_id="gpt-5.1-codex-mini",
+    context=ctx,
+    mcp_servers=[
+        MCPServer.stdio("r2pm -r r2mcp"),                          # spawns subprocess
+        MCPServer.stdio("npx @modelcontextprotocol/server-filesystem /tmp"),
+        MCPServer.http("http://localhost:9000/mcp"),                # Streamable HTTP
+        MCPServer.sse("http://localhost:9000/sse"),                 # legacy SSE
+    ],
+    options={"reasoning_effort": "medium"},
+    max_turns=20,                                                   # safety limit
+    on_event=lambda e: print(e),                                    # optional live output
+)
+```
+
+**How it works:**
+1. `MCPHub` connects to all servers concurrently
+2. Tools are auto-discovered via `list_tools` from each server
+3. All tools merged into a flat list, injected into `Context.tools`
+4. `agent()` runs `stream()` in a loop, executing tool calls via `MCPHub.call_tool()`
+5. Tool results appended as `ToolResultMessage`, loop continues until model stops
+
+**Tool name collisions:** If two servers expose the same tool name, the second is namespaced: `servername__toolname`. A warning is logged.
+
+**Key classes:**
+- `MCPServer` — config only, no connection. Factory: `.stdio()`, `.http()`, `.sse()`
+- `MCPClient` — one persistent session (uses `AsyncExitStack` to keep transport alive)
+- `MCPHub` — async context manager over N clients, handles connect/discover/route/close
 
 ---
 
