@@ -102,6 +102,7 @@ Converts piai's `Context` / `Message` types to the OpenAI Responses API wire for
 - `instructions` defaults to `"You are a helpful assistant."` if no system prompt
 - `prompt_cache_key` is set from `options["session_id"]` if provided
 - Empty `TextContent` blocks (empty string) are not emitted to the wire format
+- **`temperature` is not passed** — the ChatGPT backend rejects it with a 400 error (`"Unsupported parameter: temperature"`)
 
 ---
 
