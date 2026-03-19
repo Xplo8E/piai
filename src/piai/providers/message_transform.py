@@ -1,5 +1,5 @@
 """
-Convert pyai Context/Message types → OpenAI Responses API request format.
+Convert piai Context/Message types → OpenAI Responses API request format.
 
 The Responses API (chatgpt.com/backend-api/codex/responses) differs from
 the Chat Completions API:
@@ -126,7 +126,7 @@ def _convert_tool_result(msg: ToolResultMessage) -> dict[str, Any]:
 
 
 def convert_tools(tools: list[Tool]) -> list[dict[str, Any]]:
-    """Convert pyai Tool list → OpenAI Responses API tools array."""
+    """Convert piai Tool list → OpenAI Responses API tools array."""
     return [_convert_tool(t) for t in tools]
 
 

@@ -1,11 +1,11 @@
 """
-pyai CLI — login and provider management.
+piai CLI — login and provider management.
 
 Usage:
-    pyai login [PROVIDER]     # OAuth login (default: openai-codex)
-    pyai logout [PROVIDER]    # Remove saved credentials
-    pyai list                 # List available OAuth providers
-    pyai status               # Show login status for all providers
+    piai login [PROVIDER]     # OAuth login (default: openai-codex)
+    piai logout [PROVIDER]    # Remove saved credentials
+    piai list                 # List available OAuth providers
+    piai status               # Show login status for all providers
 
 Mirrors src/cli.ts login flow.
 """
@@ -36,7 +36,7 @@ from .oauth.types import OAuthAuthInfo, OAuthLoginCallbacks, OAuthPrompt
 
 @click.group()
 def cli():
-    """pyai — Python port of pi-ai. ChatGPT Plus OAuth + LLM streaming."""
+    """piai — Python port of pi-ai. ChatGPT Plus OAuth + LLM streaming."""
 
 
 # ------------------------------------------------------------------ #
@@ -170,8 +170,8 @@ def run(prompt: str, model: str, system: str | None, provider: str):
     Quick one-shot completion from the command line.
 
     Example:
-        pyai run "What is 2+2?"
-        pyai run "Explain async/await in Python" --model gpt-4o
+        piai run "What is 2+2?"
+        piai run "Explain async/await in Python" --model gpt-4o
     """
     asyncio.run(_do_run(prompt, model, system, provider))
 

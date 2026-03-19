@@ -1,11 +1,11 @@
 """
-pyai — Python port of @mariozechner/pi-ai
+piai — Python port of @mariozechner/pi-ai
 
 Unified LLM API with ChatGPT Plus/Pro OAuth authentication.
 
 Quick start:
     # 1. Login (one-time, opens browser)
-    $ pyai login
+    $ piai login
 
     # 2. Use in code
     import asyncio

@@ -44,7 +44,7 @@ async def stream(
     if not creds:
         raise RuntimeError(
             f"Not logged in for provider '{provider_id}'. "
-            f"Run: pyai login"
+            f"Run: piai login"
         )
 
     # Auto-refresh if expired (5-minute buffer)
@@ -55,7 +55,7 @@ async def stream(
 
     account_id = creds.get_extra("accountId") or ""
     if not account_id:
-        raise RuntimeError("Missing accountId in credentials. Please login again: pyai login")
+        raise RuntimeError("Missing accountId in credentials. Please login again: piai login")
 
     opts = options or {}
     base_url = opts.pop("base_url", None)
