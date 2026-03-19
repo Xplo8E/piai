@@ -65,7 +65,7 @@ Credentials are saved to `auth.json` in your current working directory. Keep thi
 pyai run "Explain async/await in Python"
 
 # Specify a model
-pyai run "What is 2+2?" --model gpt-4o
+pyai run "What is 2+2?" --model gpt-5.1
 
 # With a system prompt
 pyai run "Summarize this" --system "You are a concise assistant"
@@ -99,7 +99,7 @@ async def main():
         messages=[UserMessage(content="What is the capital of France?")]
     )
 
-    async for event in stream("gpt-4o", ctx):
+    async for event in stream("gpt-5.1-codex-mini", ctx):
         if isinstance(event, TextDeltaEvent):
             print(event.text, end="", flush=True)
         elif isinstance(event, DoneEvent):
@@ -120,7 +120,7 @@ from pyai.types import Context, UserMessage
 
 async def main():
     ctx = Context(messages=[UserMessage(content="Write a haiku about Python.")])
-    msg = await complete("gpt-4o", ctx)
+    msg = await complete("gpt-5.1-codex-mini", ctx)
 
     for block in msg.content:
         from pyai.types import TextContent
@@ -144,7 +144,7 @@ from pyai.types import Context, UserMessage
 
 async def main():
     ctx = Context(messages=[UserMessage(content="What is 2 + 2?")])
-    text = await complete_text("gpt-4o-mini", ctx)
+    text = await complete_text("gpt-5.1-codex-mini", ctx)
     print(text)
 
 asyncio.run(main())
@@ -165,11 +165,11 @@ async def main():
     ctx = Context(system_prompt="You are a helpful assistant.")
 
     ctx.messages.append(UserMessage(content="My name is Vinay."))
-    response = await complete("gpt-4o", ctx)
+    response = await complete("gpt-5.1-codex-mini", ctx)
     ctx.messages.append(response)  # add assistant reply to history
 
     ctx.messages.append(UserMessage(content="What's my name?"))
-    response = await complete("gpt-4o", ctx)
+    response = await complete("gpt-5.1-codex-mini", ctx)
     ctx.messages.append(response)
 
     from pyai.types import TextContent
@@ -219,7 +219,7 @@ async def main():
 
     # First turn — model calls the tool
     tool_calls = []
-    async for event in stream("gpt-4o", ctx):
+    async for event in stream("gpt-5.1-codex-mini", ctx):
         if isinstance(event, ToolCallEndEvent):
             tool_calls.append(event.tool_call)
         elif isinstance(event, DoneEvent):
@@ -231,7 +231,7 @@ async def main():
         ctx.messages.append(ToolResultMessage(tool_call_id=tc.id, content=result))
 
     # Second turn — model produces final answer
-    async for event in stream("gpt-4o", ctx):
+    async for event in stream("gpt-5.1-codex-mini", ctx):
         if isinstance(event, TextDeltaEvent):
             print(event.text, end="", flush=True)
     print()
@@ -268,7 +268,7 @@ Pass an `options` dict to `stream()` or `complete()`:
 ```python
 options = {
     "session_id": "my-session",        # enables prompt caching across calls
-    "reasoning_effort": "high",        # for o3/o4 reasoning models: low/medium/high
+    "reasoning_effort": "high",        # for reasoning models (gpt-5.x): low/medium/high
     "reasoning_summary": "auto",       # auto/concise/detailed/off
     "text_verbosity": "medium",        # low/medium/high
     "temperature": 0.7,
@@ -281,11 +281,12 @@ options = {
 
 Any model your ChatGPT Plus/Pro subscription can access. Common ones:
 
-- `gpt-4o`
-- `gpt-4o-mini`
-- `o3`
-- `o4-mini`
-- `gpt-5.1-codex-mini`
+- `gpt-5.1-codex-mini` — fast, default
+- `gpt-5.1` — more capable
+- `gpt-5.1-codex-max`
+- `gpt-5.2`, `gpt-5.2-codex`
+- `gpt-5.3-codex`, `gpt-5.3-codex-spark`
+- `gpt-5.4`
 
 The model ID is passed directly to the backend — use whatever ChatGPT shows in its model picker.
 
