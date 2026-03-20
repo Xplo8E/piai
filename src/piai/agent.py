@@ -50,6 +50,7 @@ async def agent(
     require_all_servers: bool = False,
     connect_timeout: float = 60.0,
     tool_result_max_chars: int = 32_000,
+    local_handlers: dict[str, Callable[..., Any]] | None = None,
 ) -> AssistantMessage:
     """
     Run an autonomous agentic loop, optionally with MCP tool servers.
@@ -123,6 +124,7 @@ async def agent(
                 max_turns=max_turns,
                 on_event=on_event,
                 tool_result_max_chars=tool_result_max_chars,
+                local_handlers=local_handlers,
             )
     else:
         # No MCP servers — run loop without tool injection
@@ -135,6 +137,7 @@ async def agent(
             max_turns=max_turns,
             on_event=on_event,
             tool_result_max_chars=tool_result_max_chars,
+            local_handlers=local_handlers,
         )
 
 
@@ -147,6 +150,7 @@ async def _run_loop(
     max_turns: int,
     on_event: Callable[[StreamEvent], Any] | None,
     tool_result_max_chars: int,
+    local_handlers: dict[str, Callable[..., Any]] | None = None,
 ) -> AssistantMessage:
     """Internal agentic loop."""
     # Build working context — inject MCP tools if available
@@ -222,7 +226,7 @@ async def _run_loop(
                 tool_input=tc.input,
             ))
 
-            result = await _execute_tool(hub, tc, tool_result_max_chars)
+            result = await _execute_tool(hub, tc, tool_result_max_chars, local_handlers)
             is_error = result.startswith(("Tool not found:", f"Tool {tc.name!r} failed:"))
 
             await _fire_event(on_event, AgentToolResultEvent(
@@ -258,8 +262,31 @@ async def _run_loop(
     return final_message
 
 
-async def _execute_tool(hub: MCPHub | None, tc: ToolCall, max_chars: int) -> str:
-    """Execute a tool call and return result string. Never raises."""
+async def _execute_tool(
+    hub: MCPHub | None,
+    tc: ToolCall,
+    max_chars: int,
+    local_handlers: dict[str, Callable[..., Any]] | None = None,
+) -> str:
+    """Execute a tool call and return result string. Never raises.
+
+    local_handlers: optional dict of tool_name -> callable for tools that
+    should be handled locally rather than forwarded to an MCP server.
+    Callables may be sync or async; they receive the tool input dict as kwargs.
+    """
+    # Check local handlers first
+    if local_handlers and tc.name in local_handlers:
+        handler = local_handlers[tc.name]
+        try:
+            result = handler(**tc.input) if tc.input else handler()
+            if inspect.isawaitable(result):
+                result = await result
+            return str(result) if result is not None else "ok"
+        except Exception as e:
+            msg = f"Tool {tc.name!r} failed: {e}"
+            logger.warning(msg)
+            return msg
+
     if hub is None:
         return f"No MCP servers configured — cannot execute tool {tc.name!r}."
 
