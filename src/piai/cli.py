@@ -6,6 +6,7 @@ Usage:
     piai logout [PROVIDER]    # Remove saved credentials
     piai list                 # List available OAuth providers
     piai status               # Show login status for all providers
+    piai version              # Show installed version
 
 Mirrors src/cli.ts login flow.
 """
@@ -29,6 +30,7 @@ def _quiet_threading_excepthook(args):
 
 threading.excepthook = _quiet_threading_excepthook
 
+from . import __version__
 from .oauth import get_oauth_provider, get_oauth_providers
 from .oauth.storage import delete_credentials, get_provider_credentials, save_credentials
 from .oauth.types import OAuthAuthInfo, OAuthLoginCallbacks, OAuthPrompt
@@ -37,6 +39,12 @@ from .oauth.types import OAuthAuthInfo, OAuthLoginCallbacks, OAuthPrompt
 @click.group()
 def cli():
     """piai — Python port of pi-ai. ChatGPT Plus OAuth + LLM streaming."""
+
+
+@cli.command()
+def version():
+    """Show the installed piai version."""
+    click.echo(__version__)
 
 
 # ------------------------------------------------------------------ #
