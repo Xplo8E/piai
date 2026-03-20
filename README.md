@@ -308,6 +308,39 @@ result = await agent(
 
 If you pass both `context.tools` and `mcp_servers`, they are merged. MCP tools take priority on name conflicts.
 
+### local_handlers — pure Python tools (no MCP needed)
+
+Use `local_handlers` to handle tool calls with plain Python functions — no MCP server required:
+
+```python
+from piai import agent
+from piai.types import Context, Tool, UserMessage
+
+ctx = Context(
+    tools=[Tool(name="add", description="Add two numbers", parameters={
+        "type": "object",
+        "properties": {
+            "a": {"type": "number"},
+            "b": {"type": "number"},
+        },
+        "required": ["a", "b"],
+    })],
+    messages=[UserMessage(content="What is 41 + 1?")],
+)
+
+result = await agent(
+    model_id="gpt-5.1-codex-mini",
+    context=ctx,
+    local_handlers={
+        "add": lambda a, b: a + b,
+    },
+)
+```
+
+- Handlers can be sync or async
+- `local_handlers` take priority over MCP when names conflict
+- Mix with `mcp_servers` — some tools handled locally, others via MCP
+
 See [docs/mcp.md](docs/mcp.md) for the full MCP reference.
 
 ---

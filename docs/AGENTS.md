@@ -105,7 +105,21 @@ result = await agent(
 4. `agent()` runs `stream()` in a loop, executing tool calls via `MCPHub.call_tool()`
 5. Tool results appended as `ToolResultMessage`, loop continues until model stops or `max_turns` reached
 
-**Tool name collisions:** If two servers expose the same tool name, **both** are namespaced: `server1__toolname` and `server2__toolname`. A warning is logged.
+**Tool name collisions:** If two servers expose the same tool name, **both** are namespaced: `server1__toolname` and `server2__toolname`. The unnamespaced key is removed — a warning is logged.
+
+**local_handlers:** Pass pure Python callables instead of (or alongside) MCP servers. `local_handlers` take priority over MCP on name conflicts:
+
+```python
+result = await agent(
+    model_id="gpt-5.1-codex-mini",
+    context=ctx,
+    local_handlers={
+        "add": lambda a, b: a + b,           # sync
+        "fetch_url": my_async_fetch,          # async — awaited automatically
+    },
+    mcp_servers=[...],                        # mix with MCP — each tool goes to the right handler
+)
+```
 
 **Key classes:**
 - `MCPServer` — config only, no connection. Factory: `.stdio()`, `.http()`, `.sse()`, `.from_config()`, `.from_toml()`
