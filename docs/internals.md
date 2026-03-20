@@ -33,9 +33,10 @@ Python gotcha: `base64.urlsafe_b64encode()` adds `=` padding — strip it manual
 
 ## oauth/storage.py
 
-- Reads/writes `auth.json` in the **current working directory** (same as JS CLI)
+- Reads/writes `~/.piai/auth.json` by default; override with `PIAI_AUTH` env var (full path)
+- Parent directory is created automatically if it doesn't exist
 - Full file is loaded, updated, and written back atomically (no partial writes)
-- Returns `{}` silently if `auth.json` doesn't exist or is malformed
+- Returns `{}` silently if the file doesn't exist or is malformed
 - `delete_credentials()` skips the file write if the provider wasn't present (no unnecessary I/O)
 
 ---

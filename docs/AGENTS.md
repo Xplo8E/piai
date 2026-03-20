@@ -28,11 +28,11 @@ src/piai/
 ├── oauth/
 │   ├── __init__.py          # Provider registry + get_oauth_api_key() with auto-refresh
 │   ├── types.py             # OAuthCredentials, OAuthProviderInterface ABC
-│   ├── storage.py           # auth.json read/write (CWD, camelCase keys)
+│   ├── storage.py           # auth.json read/write (~/.piai/auth.json, or PIAI_AUTH env override)
 │   ├── pkce.py              # RFC 7636 PKCE: verifier + challenge
 │   └── openai_codex.py      # ChatGPT Plus OAuth login + refresh
 ├── mcp/
-│   ├── __init__.py          # exports MCPServer, MCPClient, MCPHub, to_langchain_tools, MCPHubToolset
+│   ├── __init__.py          # exports MCPServer, MCPClient, MCPHub (langchain tools in langchain_tools.py)
 │   ├── server.py            # MCPServer config (stdio/http/sse + from_config + from_toml)
 │   ├── client.py            # MCPClient — persistent connection to one MCP server
 │   ├── hub.py               # MCPHub — manages N servers, merges tools, routes calls

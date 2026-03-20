@@ -45,7 +45,7 @@ Usage:
     result = await app.ainvoke({"messages": [{"role": "user", "content": "Analyze /lib/target.so"}]})
 
 Requires:
-    pip install langchain-core langgraph-supervisor
+    pip install 'pi-ai-py[langgraph]'
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "langchain-core is required for SubAgentTool.\n"
-        "Install it with: pip install langchain-core"
+        "Install it with: pip install 'pi-ai-py[langgraph]'"
     ) from e
 
 from ..agent import agent as piai_agent
@@ -111,6 +111,7 @@ class SubAgentTool(BaseTool):
     max_turns: int = 20
     options: dict[str, Any] = {}
     on_event: Optional[Any] = None  # Callable[[StreamEvent], Any] | None
+    local_handlers: Optional[dict[str, Any]] = None  # tool_name -> Callable for tools not routed to MCP
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -144,6 +145,7 @@ class SubAgentTool(BaseTool):
             options=self.options or None,
             max_turns=self.max_turns,
             on_event=self.on_event,
+            local_handlers=self.local_handlers,
         )
 
         # Extract text from the final AssistantMessage

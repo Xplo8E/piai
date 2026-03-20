@@ -379,7 +379,8 @@ piai provides a bridge to convert MCP servers into LangChain `BaseTool` instance
 ### MCPHubToolset — async context manager (recommended)
 
 ```python
-from piai.mcp import MCPHubToolset, MCPServer
+from piai.mcp import MCPServer
+from piai.mcp.langchain_tools import MCPHubToolset
 from piai.langchain import PiAIChatModel
 from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage
@@ -396,7 +397,8 @@ async with MCPHubToolset(servers, connect_timeout=30.0) as tools:
 ### to_langchain_tools — one-shot conversion
 
 ```python
-from piai.mcp import to_langchain_tools, MCPServer
+from piai.mcp import MCPServer
+from piai.mcp.langchain_tools import to_langchain_tools
 
 servers = [MCPServer.stdio("npx -y @modelcontextprotocol/server-filesystem /tmp")]
 tools, hub = await to_langchain_tools(servers)

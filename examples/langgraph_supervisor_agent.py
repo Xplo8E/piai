@@ -23,7 +23,8 @@ from langchain.agents import create_agent
 from langgraph_supervisor import create_supervisor
 
 from piai.langchain import PiAIChatModel, SubAgentTool
-from piai.mcp import MCPHubToolset, MCPServer
+from piai.mcp import MCPServer
+from piai.mcp.langchain_tools import MCPHubToolset
 from piai.types import (
     AgentToolCallEvent,
     AgentToolResultEvent,

@@ -17,16 +17,29 @@ File format is identical to the JS SDK so credentials are cross-compatible:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .types import OAuthCredentials
 
-# Default: auth.json in current working directory — same as JS CLI
-_DEFAULT_AUTH_FILE = Path("auth.json")
-
 
 def _auth_file() -> Path:
-    return _DEFAULT_AUTH_FILE
+    """
+    Resolve the auth.json path.
+
+    Priority:
+      1. PIAI_AUTH_FILE env var — full path, useful for per-project isolation
+      2. ~/.piai/auth.json — default home location
+
+    The parent directory is created automatically if it doesn't exist.
+    """
+    if env := os.environ.get("PIAI_AUTH"):
+        p = Path(env)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    default = Path.home() / ".piai" / "auth.json"
+    default.parent.mkdir(parents=True, exist_ok=True)
+    return default
 
 
 def load_all_credentials() -> dict[str, dict]:
