@@ -40,7 +40,7 @@ Run once to authenticate. Opens a browser for you to log in with your ChatGPT ac
 piai login
 ```
 
-Credentials are saved to `auth.json` in the current directory. Keep it private — add to `.gitignore`. If you've already logged in with the JS CLI (`npx @mariozechner/pi-ai login openai-codex`), the same `auth.json` works without re-logging in.
+Credentials are saved to `~/.piai/auth.json` (created automatically). To use a custom path — useful for per-project isolation — set the `PIAI_AUTH` environment variable to any file path.
 
 ---
 
@@ -308,6 +308,39 @@ result = await agent(
 
 If you pass both `context.tools` and `mcp_servers`, they are merged. MCP tools take priority on name conflicts.
 
+### local_handlers — pure Python tools (no MCP needed)
+
+Use `local_handlers` to handle tool calls with plain Python functions — no MCP server required:
+
+```python
+from piai import agent
+from piai.types import Context, Tool, UserMessage
+
+ctx = Context(
+    tools=[Tool(name="add", description="Add two numbers", parameters={
+        "type": "object",
+        "properties": {
+            "a": {"type": "number"},
+            "b": {"type": "number"},
+        },
+        "required": ["a", "b"],
+    })],
+    messages=[UserMessage(content="What is 41 + 1?")],
+)
+
+result = await agent(
+    model_id="gpt-5.1-codex-mini",
+    context=ctx,
+    local_handlers={
+        "add": lambda a, b: a + b,
+    },
+)
+```
+
+- Handlers can be sync or async
+- `local_handlers` take priority over MCP when names conflict
+- Mix with `mcp_servers` — some tools handled locally, others via MCP
+
 See [docs/mcp.md](docs/mcp.md) for the full MCP reference.
 
 ---
@@ -493,7 +526,8 @@ piai integrates with [LangGraph](https://langchain-ai.github.io/langgraph/) for 
 Convert any MCP server into LangChain `BaseTool` instances for use in LangGraph agents:
 
 ```python
-from piai.mcp import MCPHubToolset, MCPServer
+from piai.mcp import MCPServer
+from piai.mcp.langchain_tools import MCPHubToolset
 from piai.langchain import PiAIChatModel
 from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage
@@ -542,6 +576,15 @@ See [`examples/langgraph_supervisor_agent.py`](examples/langgraph_supervisor_age
 ---
 
 ## auth.json format
+
+Credentials are stored at `~/.piai/auth.json` (created automatically on first login).
+
+To use a different path — for per-project isolation or CI environments — set `PIAI_AUTH`:
+
+```bash
+PIAI_AUTH=/path/to/project/auth.json piai login
+PIAI_AUTH=/path/to/project/auth.json python my_script.py
+```
 
 ```json
 {

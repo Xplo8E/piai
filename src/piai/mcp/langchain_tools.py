@@ -6,7 +6,8 @@ used directly inside LangGraph agents, create_supervisor, or any other
 LangChain-based orchestrator.
 
 Usage:
-    from piai.mcp import MCPServer, to_langchain_tools
+    from piai.mcp import MCPServer
+    from piai.mcp.langchain_tools import to_langchain_tools
 
     tools, hub = await to_langchain_tools([
         MCPServer.stdio("r2pm -r r2mcp"),
@@ -43,7 +44,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "langchain-core is required for MCP → LangChain tool bridge.\n"
-        "Install it with: pip install langchain-core"
+        "Install it with: pip install 'pi-ai-py[langgraph]'"
     ) from e
 
 

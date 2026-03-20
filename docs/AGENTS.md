@@ -28,11 +28,11 @@ src/piai/
 ├── oauth/
 │   ├── __init__.py          # Provider registry + get_oauth_api_key() with auto-refresh
 │   ├── types.py             # OAuthCredentials, OAuthProviderInterface ABC
-│   ├── storage.py           # auth.json read/write (CWD, camelCase keys)
+│   ├── storage.py           # auth.json read/write (~/.piai/auth.json, or PIAI_AUTH env override)
 │   ├── pkce.py              # RFC 7636 PKCE: verifier + challenge
 │   └── openai_codex.py      # ChatGPT Plus OAuth login + refresh
 ├── mcp/
-│   ├── __init__.py          # exports MCPServer, MCPClient, MCPHub, to_langchain_tools, MCPHubToolset
+│   ├── __init__.py          # exports MCPServer, MCPClient, MCPHub (langchain tools in langchain_tools.py)
 │   ├── server.py            # MCPServer config (stdio/http/sse + from_config + from_toml)
 │   ├── client.py            # MCPClient — persistent connection to one MCP server
 │   ├── hub.py               # MCPHub — manages N servers, merges tools, routes calls
@@ -105,7 +105,21 @@ result = await agent(
 4. `agent()` runs `stream()` in a loop, executing tool calls via `MCPHub.call_tool()`
 5. Tool results appended as `ToolResultMessage`, loop continues until model stops or `max_turns` reached
 
-**Tool name collisions:** If two servers expose the same tool name, **both** are namespaced: `server1__toolname` and `server2__toolname`. A warning is logged.
+**Tool name collisions:** If two servers expose the same tool name, **both** are namespaced: `server1__toolname` and `server2__toolname`. The unnamespaced key is removed — a warning is logged.
+
+**local_handlers:** Pass pure Python callables instead of (or alongside) MCP servers. `local_handlers` take priority over MCP on name conflicts:
+
+```python
+result = await agent(
+    model_id="gpt-5.1-codex-mini",
+    context=ctx,
+    local_handlers={
+        "add": lambda a, b: a + b,           # sync
+        "fetch_url": my_async_fetch,          # async — awaited automatically
+    },
+    mcp_servers=[...],                        # mix with MCP — each tool goes to the right handler
+)
+```
 
 **Key classes:**
 - `MCPServer` — config only, no connection. Factory: `.stdio()`, `.http()`, `.sse()`, `.from_config()`, `.from_toml()`

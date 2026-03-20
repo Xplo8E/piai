@@ -173,7 +173,7 @@ async def langchain_react_agent():
         print("  [skipped] 'langchain' not installed. Run: uv add langchain\n")
         return
 
-    from piai.mcp import MCPHubToolset
+    from piai.mcp.langchain_tools import MCPHubToolset
 
     @tool
     def calculator(expression: str) -> str:
