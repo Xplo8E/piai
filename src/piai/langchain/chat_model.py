@@ -9,7 +9,10 @@ accepts a chat model — chains, agents, MCP tool servers, etc.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator, Sequence
+
+if TYPE_CHECKING:
+    from langchain_core.runnables import Runnable
 
 from langchain_core.callbacks import (
     AsyncCallbackManagerForLLMRun,
@@ -381,3 +384,96 @@ class PiAIChatModel(BaseChatModel):
         if tool_choice:
             bound_kwargs["tool_choice"] = tool_choice
         return self.bind(**bound_kwargs)  # type: ignore[return-value]
+
+    def with_structured_output(
+        self,
+        schema: Any,
+        *,
+        method: str = "tool_calling",
+        include_raw: bool = False,
+        **kwargs: Any,
+    ) -> "Runnable":
+        """
+        Return a Runnable that forces structured output conforming to `schema`.
+
+        Implements the standard LangChain with_structured_output() interface
+        so PiAIChatModel works with create_supervisor, create_react_agent,
+        and any LangChain chain that uses structured output.
+
+        Args:
+            schema:      Pydantic BaseModel class or TypedDict defining the output shape.
+            method:      "tool_calling" (default, works today) or "json_mode" (future).
+            include_raw: If True, returns dict {"raw": AIMessage, "parsed": schema_instance}.
+                         If False (default), returns schema instance directly.
+            **kwargs:    Ignored (for LangChain interface compatibility).
+
+        Returns:
+            A Runnable: messages -> schema instance  (or dict if include_raw=True)
+
+        Example:
+            from pydantic import BaseModel
+
+            class VulnReport(BaseModel):
+                target: str
+                severity: str
+                description: str
+
+            llm = PiAIChatModel(model_name="gpt-5.1-codex-mini")
+            chain = llm.with_structured_output(VulnReport)
+            report = chain.invoke([HumanMessage(content="Analyze libcrypto.so")])
+            # report is a VulnReport instance
+        """
+        if method == "json_mode":
+            raise NotImplementedError(
+                "json_mode is not yet supported for PiAIChatModel. "
+                "Use method='tool_calling' (the default)."
+            )
+        if method != "tool_calling":
+            raise ValueError(
+                f"Unknown method: {method!r}. "
+                "Supported methods: 'tool_calling'. "
+                "'json_mode' is planned but not yet implemented."
+            )
+
+        from langchain_core.output_parsers.openai_tools import (
+            JsonOutputKeyToolsParser,
+            PydanticToolsParser,
+        )
+        from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+        from langchain_core.utils.function_calling import convert_to_openai_tool
+        from pydantic import BaseModel
+
+        # Use LangChain's conversion to get the canonical tool name.
+        # This avoids mismatches for TypedDict/dict schemas.
+        tool_spec = convert_to_openai_tool(schema)
+        schema_name = tool_spec["function"]["name"]
+
+        # Bind only this schema tool, and require a tool call.
+        # For piai/openai-codex backend, supported tool_choice values are
+        # none/auto/required (tool-name forcing is rejected server-side).
+        # Since only one tool is bound here, "required" effectively forces
+        # this exact schema tool to be called.
+        llm = self.bind_tools([schema], tool_choice="required")
+
+        # Parse strategy:
+        # - Pydantic model class -> parsed BaseModel instance
+        # - TypedDict / dict schema -> parsed args dict
+        is_pydantic_model = isinstance(schema, type) and issubclass(schema, BaseModel)
+        if is_pydantic_model:
+            parser = PydanticToolsParser(tools=[schema], first_tool_only=True)
+        else:
+            parser = JsonOutputKeyToolsParser(key_name=schema_name, first_tool_only=True)
+
+        if include_raw:
+            # CRITICAL IMPLEMENTATION NOTE:
+            # We pipe `llm | RunnableParallel(...)` NOT `RunnableParallel(raw=llm, parsed=...)`.
+            # The wrong form (raw=llm) would invoke the LLM twice — once for raw, once for parsed.
+            # The correct form: llm runs ONCE, its AIMessage output fans to both branches.
+            #   raw=RunnablePassthrough() → passes the AIMessage through unchanged
+            #   parsed=parser             → parses the same AIMessage into schema instance
+            return llm | RunnableParallel(
+                raw=RunnablePassthrough(),
+                parsed=parser,
+            )
+
+        return llm | parser
